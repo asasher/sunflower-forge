@@ -10,6 +10,7 @@ export type IpcSelectPaths = {
 export type PathNode = {
   name: string;
   path: string;
+  filesCount: number;
   children: PathNode[];
 };
 export type IpcIndexPaths = {

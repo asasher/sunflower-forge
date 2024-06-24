@@ -3,17 +3,15 @@ import path from "path";
 import { readdir, stat } from "fs/promises";
 import { IpcIndexPaths, IpcSelectPaths, PathNode } from "./renderer";
 
-async function indexPaths(fullPaths: string[]): Promise<PathNode[]> {
-  return Promise.all(
-    fullPaths.map(async (fullPath) => {
-      const baseName = path.basename(fullPath);
-      return {
-        name: baseName,
-        path: fullPath,
-        children: await indexPath(fullPath),
-      };
-    }),
-  );
+async function indexPaths(
+  fullPaths: string[],
+  ignoreHidden = true,
+): Promise<PathNode[]> {
+  return (
+    await Promise.all(
+      fullPaths.flatMap(async (fullPath) => indexPath(fullPath, ignoreHidden)),
+    )
+  ).flat();
 }
 
 async function indexPath(
@@ -30,6 +28,7 @@ async function indexPath(
       return [
         {
           name: baseName,
+          filesCount: 1,
           path: fullPath,
           children: [],
         },
@@ -37,20 +36,19 @@ async function indexPath(
     }
     if (stats.isDirectory()) {
       const childrenNames = await readdir(fullPath);
-      const children = await Promise.all(
-        childrenNames.map(async (childName) => {
-          const fullPathToChild = path.join(fullPath, childName);
-          return {
-            name: childName,
-            path: fullPathToChild,
-            children: await indexPath(fullPathToChild, ignoreHidden),
-          };
-        }),
+      const childrenPaths = childrenNames.map((childName) =>
+        path.join(fullPath, childName),
+      );
+      const children = await indexPaths(childrenPaths, ignoreHidden);
+      const filesCount = children.reduce(
+        (acc, curr) => acc + curr.filesCount,
+        0,
       );
       return [
         {
           name: baseName,
           path: fullPath,
+          filesCount,
           children,
         },
       ];

@@ -1,18 +1,19 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { createRoot } from "react-dom/client";
+import { PathNode } from "./ipcs/renderer";
 
 const { selectFolder, indexFolder } = window.ipc;
 
 function App() {
-  const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
-  const [items, setItems] = useState<string[]>([]);
+  const [items, setItems] = useState<PathNode[]>([]);
   const [isOver, setIsOver] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      setItems(await indexFolder(selectedPaths));
-    })();
-  }, [selectedPaths]);
+  console.log("items", items);
+  const filesCount = items.reduce((acc, curr) => acc + curr.filesCount, 0);
+
+  async function handleSelect(selectedPaths: string[]) {
+    setItems(await indexFolder(selectedPaths));
+  }
 
   // TODO: Copy over eslint config from t3
   return (
@@ -23,29 +24,21 @@ function App() {
       <div
         onDrop={(e) => {
           console.log("Drop");
-
-          // Prevent default behavior (Prevent file from being opened)
           e.preventDefault();
-
           const droppedPaths: string[] = [];
-
           if (e.dataTransfer.items) {
-            // Use DataTransferItemList interface to access the file(s)
             [...e.dataTransfer.items].forEach((item, i) => {
-              // If dropped items aren't files, reject them
               if (item.kind === "file") {
                 const file = item.getAsFile();
                 droppedPaths.push(file.path);
-                console.log(`… file[${i}].name = ${file.name}`);
               }
             });
           } else {
-            // Use DataTransfer interface to access the file(s)
             [...e.dataTransfer.files].forEach((file, i) => {
               droppedPaths.push(file.path);
             });
           }
-          setSelectedPaths(droppedPaths);
+          void handleSelect(droppedPaths);
           setIsOver(false);
         }}
         onDragEnter={() => {
@@ -59,13 +52,13 @@ function App() {
         onDragOver={(e) => e.preventDefault()}
         onMouseDown={async () => {
           const selectedPaths = await selectFolder();
-          setSelectedPaths(selectedPaths);
+          handleSelect(selectedPaths);
         }}
         className={`${isOver ? "border-blue-300" : "border-slate-300"} flex h-48 w-full cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed`}
       >
-        {selectedPaths.length == 0
+        {items.length == 0
           ? "Drag n Drop a files or folders here 🗂️"
-          : `Currently you've ${selectedPaths.length} files and folders with a total of ${items.length} items`}
+          : `Currently you've selected ${items.length} items with a total of ${filesCount} files`}
       </div>
     </div>
   );
