@@ -1,6 +1,6 @@
 # Sunflower Forge
 
-![public/sunflower-forge.png]()
+![./public/sunflower-forge.png]()
 
 A bunch of open-source tools to help the technologically-challenged.
 
