@@ -22,19 +22,23 @@ async function selectFolder() {
   const result = await directoryOpen({
     recursive: true,
   });
-  return result
+  let paths = result
     .map((file) => {
       if (file instanceof FileSystemDirectoryHandle) return;
       return file.webkitRelativePath;
     })
     .filter((x) => !!x) as string[];
+  const basePath = paths[0]!.split("/")[0]!;
+  console.log(basePath);
+  paths = paths.map((path) => path.replace(`${basePath}/`, "./"));
+  console.log(paths);
+  return paths;
 }
 
 function indexFolder(filePaths: string[]) {
   if (filePaths.length === 0) return [];
 
   const map = new Map<string, Set<string>>();
-  const baseDir = filePaths[0]!.split("/")[0]!;
 
   const traverse = (path: string) => {
     const [parent, child, ...tail] = path.split("/");
@@ -90,9 +94,10 @@ function indexFolder(filePaths: string[]) {
       },
     ];
   };
-  const tree = toTree(baseDir);
 
-  return tree;
+  const tree = toTree(".");
+
+  return tree.flatMap((node) => node.children);
 }
 
 function toMdast(nodes: PathNode[]): unknown {
@@ -140,7 +145,7 @@ function toMdast(nodes: PathNode[]): unknown {
               {
                 type: "text",
                 value:
-                  "Links are relative to the folder you selected. So make sure you place the word document next to it (and not inside it or somewhere totally different).",
+                  "Links are relative to the folder you selected. So make sure you place the word document inside it.",
               },
             ],
           },
