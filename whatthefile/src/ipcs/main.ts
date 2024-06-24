@@ -1,7 +1,12 @@
-import { dialog } from "electron";
+import { dialog, shell } from "electron";
 import path from "path";
 import { readdir, stat } from "fs/promises";
-import { IpcIndexPaths, IpcSelectPaths, PathNode } from "./renderer";
+import {
+  IpcIndexPaths,
+  IpcOpenFileExplorer,
+  IpcSelectPaths,
+  PathNode,
+} from "./renderer";
 
 async function indexPaths(
   fullPaths: string[],
@@ -69,12 +74,24 @@ export const ipcSelectPaths: IpcSelectPaths = {
   name: "dialog:selectPaths",
   handler: async () => {
     const { canceled, filePaths } = await dialog.showOpenDialog({
-      properties: ["openDirectory", "multiSelections"],
+      properties: ["multiSelections", "openDirectory", "openFile"],
     });
     if (canceled) {
-      return;
+      return [];
     } else {
       return filePaths;
+    }
+  },
+};
+
+export const ipcOpenFileExplorer: IpcOpenFileExplorer = {
+  name: "shell:openFileExplorer",
+  handler: async (filePath: string) => {
+    try {
+      const decodedPath = decodeURI(filePath);
+      await shell.showItemInFolder(decodedPath);
+    } catch (e) {
+      console.error(e);
     }
   },
 };

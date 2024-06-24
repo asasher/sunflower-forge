@@ -1,37 +1,11 @@
 import { app, BrowserWindow, session } from "electron";
-import { ipcIndexPaths, ipcSelectPaths } from "./ipcs/main";
+import {
+  ipcIndexPaths,
+  ipcOpenFileExplorer,
+  ipcSelectPaths,
+} from "./ipcs/main";
 import { registerIpc } from "./ipcs";
 import path from "path";
-import { readdir, stat } from "fs/promises";
-
-async function indexPaths(path: string[]): Promise<string[]> {
-  return (await Promise.all(path.map((p) => indexPath(p)))).flat();
-}
-
-async function indexPath(
-  nameOrPath: string,
-  parentPath = "",
-  ignoreHidden = true,
-): Promise<string[]> {
-  try {
-    if (ignoreHidden && path.basename(nameOrPath).startsWith(".")) {
-      return [];
-    }
-    const fullPath = path.join(parentPath, nameOrPath);
-    const stats = await stat(fullPath);
-    if (stats.isFile()) {
-      return [fullPath];
-    }
-    if (stats.isDirectory()) {
-      const files = await readdir(fullPath);
-      return indexPaths(files.map((f) => path.join(fullPath, f)));
-    }
-    return [];
-  } catch (e) {
-    console.error(e);
-    return [];
-  }
-}
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require("electron-squirrel-startup")) {
@@ -62,6 +36,7 @@ const createWindow = () => {
 
   registerIpc(ipcSelectPaths);
   registerIpc(ipcIndexPaths);
+  registerIpc(ipcOpenFileExplorer);
 
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({
