@@ -1,9 +1,43 @@
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { PathNode } from "./ipcs/renderer";
-import Hello from "./Hello.mdx";
+import { toMarkdown } from "mdast-util-to-markdown";
+import Markdown from "react-markdown";
 
 const { selectFolder, indexFolder } = window.ipc;
+
+function toMdast(nodes: PathNode[]): any {
+  return {
+    type: "list",
+    ordered: true,
+    start: 1,
+    spread: false,
+    children: nodes.map((node) => {
+      let children = [];
+      if (node.children.length === 0) {
+        children = [
+          {
+            type: "text",
+            value: node.name,
+          },
+        ];
+      } else {
+        children = [
+          {
+            type: "text",
+            value: node.name,
+          },
+          toMdast(node.children),
+        ];
+      }
+      return {
+        type: "listItem",
+        spread: false,
+        children,
+      };
+    }),
+  };
+}
 
 function App() {
   const [items, setItems] = useState<PathNode[]>([]);
@@ -15,6 +49,8 @@ function App() {
   async function handleSelect(selectedPaths: string[]) {
     setItems(await indexFolder(selectedPaths));
   }
+
+  const content = toMarkdown(toMdast(items) as any);
 
   // TODO: Copy over eslint config from t3
   return (
@@ -61,9 +97,11 @@ function App() {
           ? "Drag n Drop a files or folders here 🗂️"
           : `Currently you've selected ${items.length} items with a total of ${filesCount} files`}
       </div>
-      <div className="prose w-full justify-start pt-8">
-        <Hello name={"World"} />
-      </div>
+      {content && (
+        <Markdown className="prose m-0 mt-8 flex w-full justify-start rounded-lg border-2 border-blue-300 p-4">
+          {content}
+        </Markdown>
+      )}
     </div>
   );
 }
