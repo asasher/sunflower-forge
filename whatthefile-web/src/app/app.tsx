@@ -213,7 +213,7 @@ export default function App() {
   // TODO: Copy over eslint config from t3
   return (
     <div className="flex min-h-svh w-full flex-col gap-4 p-8">
-      <h1 className="bg-gradient-to-r from-red-500 to-orange-500 bg-clip-text text-xl font-bold text-transparent">
+      <h1 className="bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-xl font-bold text-transparent">
         What The File!
       </h1>
       {items.length === 0 && (
@@ -229,6 +229,23 @@ export default function App() {
             Click here to select a folder 🗂️
           </div>
           <p className="max-w-md text-sm text-slate-500">
+            Make sure you are using{" "}
+            <a
+              href="https://www.google.com/chrome/"
+              className="font-bold text-amber-400 text-amber-500 underline"
+            >
+              Chrome
+            </a>
+            , or better yet{" "}
+            <a
+              href="https://arc.net/"
+              className="font-bold text-blue-400 text-purple-500 underline"
+            >
+              Arc
+            </a>{" "}
+            as your browser.
+          </p>
+          <p className="max-w-md text-sm text-slate-500">
             This will index all the files in the folder, link them to originals
             and let you download the index as a Word document.
           </p>
@@ -238,7 +255,7 @@ export default function App() {
             <a
               href="https://github.com/asasher/sunflower-forge"
               target="_blank"
-              className="text-blue-400 underline"
+              className="font-bold text-blue-400 underline"
             >
               here
             </a>{" "}
