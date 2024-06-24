@@ -5,7 +5,6 @@ import { toMarkdown } from "mdast-util-to-markdown";
 import Markdown from "react-markdown";
 import remarkParse from "remark-parse";
 import { unified } from "unified";
-import { saveAs } from "file-saver";
 import { ChevronLeft, FolderDown } from "lucide-react";
 import remarkRehype from "remark-rehype";
 import { asBlob } from "html-docx-js-typescript";
@@ -21,17 +20,21 @@ export type PathNode = {
 
 async function selectFolder() {
   const result = await directoryOpen({
-    recursive: true
-  })
-  return result.map(file => {
-    if (file instanceof FileSystemDirectoryHandle)
-      return;
-    return file.webkitRelativePath; 
-  }).filter(x => !!x) as string[];
+    recursive: true,
+  });
+  return result
+    .map((file) => {
+      if (file instanceof FileSystemDirectoryHandle) return;
+      return file.webkitRelativePath;
+    })
+    .filter((x) => !!x) as string[];
 }
 
-async function indexFolder(filePaths: string[]) {
+function indexFolder(filePaths: string[]) {
+  if (filePaths.length === 0) return [];
+
   const map = new Map<string, Set<string>>();
+  const baseDir = filePaths[0]!.split("/")[0]!;
 
   const traverse = (path: string) => {
     const [parent, child, ...tail] = path.split("/");
@@ -41,28 +44,58 @@ async function indexFolder(filePaths: string[]) {
     if (!map.has(parent)) {
       map.set(parent, new Set());
     }
-    map.get(parent)?.add(child);
+    if (!child.startsWith(".")) map.get(parent)?.add(child);
     traverse([child, ...tail].join("/"));
-  }
-
+  };
   filePaths.forEach(traverse);
 
-  console.log(map);
+  const isDir = (path: string) => map.has(path);
 
-  return Promise.resolve([]);
+  const toTree = (currentPath: string, basePath = "."): PathNode[] => {
+    const fullPath = [basePath, currentPath].join("/");
+    if (!isDir(currentPath)) {
+      return [
+        {
+          name: currentPath,
+          path: fullPath,
+          filesCount: 0, // Count of files in the dir, in case of file it'll be 0
+          children: [],
+        },
+      ];
+    }
+    const items = Array.from(map.get(currentPath)!);
+    if (items.length === 0) {
+      // This is an empty "dir"
+      return [
+        {
+          name: currentPath,
+          path: fullPath,
+          filesCount: 0, // Has no files
+          children: [],
+        },
+      ];
+    }
+
+    const children = items.flatMap((item) => toTree(item, fullPath));
+    const filesCount =
+      children.reduce((acc, curr) => acc + curr.filesCount, 0) +
+      items.filter((item) => !isDir(item)).length;
+
+    return [
+      {
+        name: currentPath,
+        path: fullPath,
+        filesCount,
+        children,
+      },
+    ];
+  };
+  const tree = toTree(baseDir);
+
+  return tree;
 }
 
-async function openFileExplorer(filePath: string) {
-  console.log("Open explorer", filePath);
-  return Promise.resolve();
-}
-
-async function openExternal(url: string) {
-  console.log("Open external", url);
-  return Promise.resolve();
-}
-
-function toMdast(nodes: PathNode[]): any {
+function toMdast(nodes: PathNode[]): unknown {
   if (nodes.length === 0) {
     return {
       type: "root",
@@ -83,7 +116,33 @@ function toMdast(nodes: PathNode[]): any {
         children: [
           {
             type: "text",
-            value: `This is a list of all the files in the current folder and subfolders. You can click on a file to open it. There are ${itemsCount} files in total.`,
+            value: `This is a list of all the files in the current folder and subfolders.`,
+          },
+          { type: "text", value: " " },
+          {
+            type: "strong",
+            children: [
+              {
+                type: "text",
+                value: `There are ${itemsCount} files in total.`,
+              },
+            ],
+          },
+          { type: "text", value: "\n\n" },
+          {
+            type: "text",
+            value: `Files are also linked to the originals. In the generated word document, you can click on an entry to open it.`,
+          },
+          { type: "text", value: "\n\n" },
+          {
+            type: "emphasis",
+            children: [
+              {
+                type: "text",
+                value:
+                  "Links are relative to the folder you selected. So make sure you place the word document next to it (and not inside it or somewhere totally different).",
+              },
+            ],
           },
         ],
       },
@@ -92,7 +151,7 @@ function toMdast(nodes: PathNode[]): any {
   };
 }
 
-function toMdastList(nodes: PathNode[]): any {
+function toMdastList(nodes: PathNode[]): unknown {
   const list = {
     type: "list",
     ordered: true,
@@ -130,14 +189,12 @@ function toMdastList(nodes: PathNode[]): any {
 
 export default function App() {
   const [items, setItems] = useState<PathNode[]>([]);
-  const [isOver, setIsOver] = useState(false);
 
-  const filesCount = items.reduce((acc, curr) => acc + curr.filesCount, 0);
-
-  async function handleSelect(selectedPaths: string[]) {
-    setItems(await indexFolder(selectedPaths));
+  function handleSelect(selectedPaths: string[]) {
+    setItems(indexFolder(selectedPaths));
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
   const content = toMarkdown(toMdast(items) as any);
 
   async function handleSaveToWord() {
@@ -147,7 +204,10 @@ export default function App() {
       .use(rehypeStringify);
     const doc = await processor.process(content);
     const blob = (await asBlob(String(doc))) as Blob;
-    saveAs(blob, "whatthefile.docx");
+    await fileSave(blob, {
+      fileName: "whatthefile.docx",
+      extensions: [".docx"],
+    });
   }
 
   // TODO: Copy over eslint config from t3
@@ -159,42 +219,14 @@ export default function App() {
       {items.length === 0 && (
         <>
           <div
-            onDrop={(e) => {
-              e.preventDefault();
-              const droppedPaths: string[] = [];
-              if (e.dataTransfer.items) {
-                [...e.dataTransfer.items].forEach((item, i) => {
-                  if (item.kind === "file") {
-                    const file = item.getAsFile();
-                    if (file?.name)
-                      droppedPaths.push(file?.name);
-                  }
-                });
-              } else {
-                [...e.dataTransfer.files].forEach((file, i) => {
-                  droppedPaths.push(file.name);
-                });
-              }
-              void handleSelect(droppedPaths);
-              setIsOver(false);
-            }}
-            onDragEnter={() => {
-              setIsOver(true);
-            }}
-            onDragLeave={() => {
-              setIsOver(false);
-            }}
-            onDragOver={(e) => e.preventDefault()}
             onMouseDown={async (e) => {
               e.preventDefault();
               const selectedPaths = await selectFolder();
               handleSelect(selectedPaths);
             }}
-            className={`${isOver ? "border-blue-300" : "border-slate-300"} flex h-48 w-full cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed text-slate-700`}
+            className="flex max-w-sm cursor-pointer flex-col items-center justify-center rounded-lg bg-blue-400 p-4 font-bold text-white hover:bg-blue-500"
           >
-            {items.length == 0
-              ? "Drag n Drop a folder here 🗂️ or click to select!"
-              : `Currently you've selected ${items[0]?.name} items with a total of ${filesCount} files`}
+            Click here to select a folder 🗂️
           </div>
           <p className="max-w-md text-sm text-slate-500">
             This will index all the files in the folder, link them to originals
@@ -207,10 +239,6 @@ export default function App() {
               href="https://github.com/asasher/sunflower-forge"
               target="_blank"
               className="text-blue-400 underline"
-              onClick={(e) => {
-                e.preventDefault();
-                void openExternal("https://github.com/asasher/sunflower-forge");
-              }}
             >
               here
             </a>{" "}
@@ -242,17 +270,14 @@ export default function App() {
             className="prose flex w-full max-w-none flex-col justify-start rounded-lg border-blue-300 p-4"
             components={{
               a(props) {
+                // eslint-disable-next-line @typescript-eslint/no-unused-vars
                 const { children, className, node, href, ...rest } = props;
                 return (
                   <a
                     {...rest}
-                    href={`file:/${props.href}`}
-                    className={className}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      if (props.href)
-                        void openFileExplorer(props.href);
-                    }}
+                    href={`file://${href}`}
+                    className={`${className} cursor-none border-b border-dashed border-blue-300 no-underline`}
+                    onClick={(e) => e.preventDefault()}
                   >
                     {children}
                   </a>

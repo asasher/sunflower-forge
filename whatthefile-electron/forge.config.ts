@@ -1,5 +1,6 @@
 import type { ForgeConfig } from "@electron-forge/shared-types";
 import { MakerZIP } from "@electron-forge/maker-zip";
+import { MakerSquirrel } from "@electron-forge/maker-squirrel";
 import { VitePlugin } from "@electron-forge/plugin-vite";
 import { FusesPlugin } from "@electron-forge/plugin-fuses";
 import { FuseV1Options, FuseVersion } from "@electron/fuses";
@@ -11,7 +12,7 @@ const config: ForgeConfig = {
     extraResource: ["public/icon.png", "public/icon.icns", "public/icon.ico"],
   },
   rebuildConfig: {},
-  makers: [new MakerZIP({})],
+  makers: [new MakerSquirrel({})],
   plugins: [
     new VitePlugin({
       // `build` can specify multiple entry builds, which can be Main process, Preload scripts, Worker process, etc.
