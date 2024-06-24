@@ -3,6 +3,7 @@ import path from "path";
 import { readdir, stat } from "fs/promises";
 import {
   IpcIndexPaths,
+  IpcOpenExternal,
   IpcOpenFileExplorer,
   IpcSelectPaths,
   PathNode,
@@ -90,6 +91,17 @@ export const ipcOpenFileExplorer: IpcOpenFileExplorer = {
     try {
       const decodedPath = decodeURI(filePath);
       await shell.showItemInFolder(decodedPath);
+    } catch (e) {
+      console.error(e);
+    }
+  },
+};
+
+export const ipcOpenExternal: IpcOpenExternal = {
+  name: "shell:openExternal",
+  handler: async (url: string) => {
+    try {
+      await shell.openExternal(url);
     } catch (e) {
       console.error(e);
     }

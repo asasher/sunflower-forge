@@ -4,7 +4,6 @@ import { PathNode } from "./ipcs/renderer";
 import { toMarkdown } from "mdast-util-to-markdown";
 import Markdown from "react-markdown";
 import remarkParse from "remark-parse";
-import docx from "remark-docx";
 import { unified } from "unified";
 import { saveAs } from "file-saver";
 import { ChevronLeft, FolderDown } from "lucide-react";
@@ -12,7 +11,8 @@ import remarkRehype from "remark-rehype";
 import { asBlob } from "html-docx-js-typescript";
 import rehypeStringify from "rehype-stringify";
 
-const { selectFolder, indexFolder, openFileExplorer } = window.ipc;
+const { selectFolder, indexFolder, openFileExplorer, openExternal } =
+  window.ipc;
 
 function toMdast(nodes: PathNode[]): any {
   if (nodes.length === 0) {
@@ -109,43 +109,65 @@ function App() {
         What The File!
       </h1>
       {items.length === 0 && (
-        <div
-          onDrop={(e) => {
-            e.preventDefault();
-            const droppedPaths: string[] = [];
-            if (e.dataTransfer.items) {
-              [...e.dataTransfer.items].forEach((item, i) => {
-                if (item.kind === "file") {
-                  const file = item.getAsFile();
+        <>
+          <div
+            onDrop={(e) => {
+              e.preventDefault();
+              const droppedPaths: string[] = [];
+              if (e.dataTransfer.items) {
+                [...e.dataTransfer.items].forEach((item, i) => {
+                  if (item.kind === "file") {
+                    const file = item.getAsFile();
+                    droppedPaths.push(file.path);
+                  }
+                });
+              } else {
+                [...e.dataTransfer.files].forEach((file, i) => {
                   droppedPaths.push(file.path);
-                }
-              });
-            } else {
-              [...e.dataTransfer.files].forEach((file, i) => {
-                droppedPaths.push(file.path);
-              });
-            }
-            void handleSelect(droppedPaths);
-            setIsOver(false);
-          }}
-          onDragEnter={() => {
-            setIsOver(true);
-          }}
-          onDragLeave={() => {
-            setIsOver(false);
-          }}
-          onDragOver={(e) => e.preventDefault()}
-          onMouseDown={async (e) => {
-            e.preventDefault();
-            const selectedPaths = await selectFolder();
-            handleSelect(selectedPaths);
-          }}
-          className={`${isOver ? "border-blue-300" : "border-slate-300"} flex h-48 w-full cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed`}
-        >
-          {items.length == 0
-            ? "Drag n Drop a files or folders here 🗂️ to build an index"
-            : `Currently you've selected ${items.length} items with a total of ${filesCount} files`}
-        </div>
+                });
+              }
+              void handleSelect(droppedPaths);
+              setIsOver(false);
+            }}
+            onDragEnter={() => {
+              setIsOver(true);
+            }}
+            onDragLeave={() => {
+              setIsOver(false);
+            }}
+            onDragOver={(e) => e.preventDefault()}
+            onMouseDown={async (e) => {
+              e.preventDefault();
+              const selectedPaths = await selectFolder();
+              handleSelect(selectedPaths);
+            }}
+            className={`${isOver ? "border-blue-300" : "border-slate-300"} flex h-48 w-full cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed text-slate-700`}
+          >
+            {items.length == 0
+              ? "Drag n Drop files or folders here 🗂️ or click to select!"
+              : `Currently you've selected ${items.length} items with a total of ${filesCount} files`}
+          </div>
+          <p className="max-w-md text-sm text-slate-500">
+            This will index all the files in the folder, link them to originals
+            and let you download the index as a Word document.
+          </p>
+          <p className="max-w-md text-sm text-slate-500">
+            All of this happens on your machine and no data is sent anywhere.
+            All the source code is available{" "}
+            <a
+              href="https://github.com/asasher/sunflower-forge"
+              target="_blank"
+              className="text-blue-400 underline"
+              onClick={(e) => {
+                e.preventDefault();
+                void openExternal("https://github.com/asasher/sunflower-forge");
+              }}
+            >
+              here
+            </a>{" "}
+            under the MIT license.
+          </p>
+        </>
       )}
       {content && (
         <div className="flex w-full flex-col justify-start gap-4 rounded-lg border-2">

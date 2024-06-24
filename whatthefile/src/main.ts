@@ -1,6 +1,7 @@
 import { app, BrowserWindow, session } from "electron";
 import {
   ipcIndexPaths,
+  ipcOpenExternal,
   ipcOpenFileExplorer,
   ipcSelectPaths,
 } from "./ipcs/main";
@@ -37,6 +38,7 @@ const createWindow = () => {
   registerIpc(ipcSelectPaths);
   registerIpc(ipcIndexPaths);
   registerIpc(ipcOpenFileExplorer);
+  registerIpc(ipcOpenExternal);
 
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({
