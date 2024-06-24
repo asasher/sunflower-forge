@@ -61,7 +61,9 @@ function App() {
           ? "Drag n Drop a files or folders here 🗂️"
           : `Currently you've selected ${items.length} items with a total of ${filesCount} files`}
       </div>
-      <Hello />
+      <div className="prose w-full justify-start pt-8">
+        <Hello name={"World"} />
+      </div>
     </div>
   );
 }
