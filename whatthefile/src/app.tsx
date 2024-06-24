@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { createRoot } from "react-dom/client";
 import { PathNode } from "./ipcs/renderer";
+import Hello from "./Hello.mdx";
 
 const { selectFolder, indexFolder } = window.ipc;
 
@@ -60,6 +61,7 @@ function App() {
           ? "Drag n Drop a files or folders here 🗂️"
           : `Currently you've selected ${items.length} items with a total of ${filesCount} files`}
       </div>
+      <Hello />
     </div>
   );
 }
