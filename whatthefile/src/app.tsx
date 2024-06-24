@@ -8,7 +8,9 @@ import docx from "remark-docx";
 import { unified } from "unified";
 import { saveAs } from "file-saver";
 import { ChevronLeft, FolderDown } from "lucide-react";
-import remarkStringify from "remark-stringify";
+import remarkRehype from "remark-rehype";
+import { asBlob } from "html-docx-js-typescript";
+import rehypeStringify from "rehype-stringify";
 
 const { selectFolder, indexFolder, openFileExplorer } = window.ipc;
 
@@ -91,10 +93,13 @@ function App() {
   const content = toMarkdown(toMdast(items) as any);
 
   async function handleSaveToWord() {
-    const processor = unified().use(remarkParse).use(docx, { output: "blob" });
+    const processor = unified()
+      .use(remarkParse)
+      .use(remarkRehype)
+      .use(rehypeStringify);
     const doc = await processor.process(content);
-    const blob = (await doc.result) as any;
-    saveAs(blob, "example.docx");
+    const blob = (await asBlob(String(doc))) as Blob;
+    saveAs(blob, "whatthefile.docx");
   }
 
   // TODO: Copy over eslint config from t3
