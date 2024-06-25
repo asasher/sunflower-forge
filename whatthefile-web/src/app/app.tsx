@@ -31,6 +31,7 @@ export default function App() {
   const [content, setContent] = useState<string | undefined>();
   const [blob, setBlob] = useState<Blob | undefined>();
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string>();
 
   const workerRef = useRef<Worker>();
 
@@ -74,10 +75,21 @@ export default function App() {
     workerRef.current?.postMessage(selectedPaths);
   }, []);
 
-  function handleSelect(selectedPaths: string[]) {
-    console.log("Sent selected paths to worker");
-    setIsLoading(true);
-    void index(selectedPaths);
+  async function handleSelect() {
+    try {
+      const selectedPaths = await selectFolder();
+      setIsLoading(true);
+      console.log("Sent selected paths to worker");
+      void index(selectedPaths);
+    } catch (e) {
+      console.error(e);
+      setErrorMessage(
+        "It seemed I couldn't access your folder, try again later. If you're trying to select One Drive or Google Drive, make sure they are available offline.",
+      );
+      setTimeout(() => {
+        setErrorMessage(undefined);
+      }, 5000);
+    }
   }
 
   async function handleSaveToWord() {
@@ -104,10 +116,9 @@ export default function App() {
       {!content && (
         <>
           <button
-            onMouseDown={async (e) => {
+            onMouseDown={(e) => {
               e.preventDefault();
-              const selectedPaths = await selectFolder();
-              handleSelect(selectedPaths);
+              void handleSelect();
             }}
             className={`${isLoading ? "animate-pulse" : ""} flex max-w-sm cursor-pointer flex-col items-center justify-center rounded-lg bg-blue-400 p-4 font-bold text-white hover:bg-blue-500 disabled:bg-slate-300`}
             disabled={isLoading}
@@ -116,6 +127,9 @@ export default function App() {
               ? "Working on it, this may take a minute..."
               : "Click here to select a folder 🗂️"}
           </button>
+          {errorMessage && (
+            <p className="max-w-md text-sm text-red-500">{errorMessage}</p>
+          )}
           <p className="max-w-md text-sm text-slate-500">
             Make sure you are using{" "}
             <a
