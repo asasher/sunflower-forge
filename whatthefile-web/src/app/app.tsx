@@ -1,7 +1,6 @@
 "use client";
 
-import { useState } from "react";
-import { toMarkdown } from "mdast-util-to-markdown";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import remarkParse from "remark-parse";
 import { unified } from "unified";
@@ -10,13 +9,8 @@ import remarkRehype from "remark-rehype";
 import { asBlob } from "html-docx-js-typescript";
 import rehypeStringify from "rehype-stringify";
 import { directoryOpen, fileSave } from "browser-fs-access";
-
-export type PathNode = {
-  name: string;
-  path: string;
-  filesCount: number;
-  children: PathNode[];
-};
+import { toMarkdown } from "mdast-util-to-markdown";
+import remarkStringify from "node_modules/remark-stringify/lib";
 
 async function selectFolder() {
   const result = await directoryOpen({
@@ -34,166 +28,39 @@ async function selectFolder() {
   return paths;
 }
 
-function indexFolder(filePaths: string[]) {
-  if (filePaths.length === 0) return [];
-
-  const map = new Map<string, PathNode>();
-  const childrenOfParents = new Map<string, Set<string>>();
-
-  filePaths.forEach((path) => {
-    const segments = path.split("/");
-
-    if (segments.length < 0) {
-      console.log("Got 0 or 1 segments. This should not happen", path);
-      console.log(
-        "Webkit will only return files paths so empty folders won't be here",
-      );
-      return;
-    }
-
-    for (let i = 0; i < segments.length; i++) {
-      const child = segments.slice(0, segments.length - i).join("/");
-      const parent = segments.slice(0, segments.length - i - 1).join("/");
-      if (!parent) continue;
-
-      if (!map.has(parent)) {
-        map.set(parent, {
-          name: parent.split("/").slice(-1)[0]!,
-          path: parent,
-          filesCount: 0,
-          children: [],
-        });
-        childrenOfParents.set(parent, new Set());
-      }
-      const parentNode = map.get(parent)!;
-
-      if (!map.has(child)) {
-        map.set(child, {
-          name: child.split("/").slice(-1)[0]!,
-          path: child,
-          filesCount: 0,
-          children: [],
-        });
-      }
-      const childNode = map.get(child)!;
-      if (!childrenOfParents.get(parent)!.has(child)) {
-        parentNode.children.push(childNode);
-
-        // This can probably be done in a more efficient way
-        // But it's fine for now
-        parentNode.filesCount =
-          parentNode.children.filter((c) => c.children.length === 0).length +
-          parentNode.children.reduce((acc, curr) => acc + curr.filesCount, 0);
-
-        childrenOfParents.get(parent)!.add(child);
-      }
-    }
-  });
-
-  return map.has(".") ? map.get(".")!.children : [];
-}
-
-function toMdast(nodes: PathNode[]): unknown {
-  if (nodes.length === 0) {
-    return {
-      type: "root",
-      children: [],
-    };
-  }
-  const itemsCount = nodes.reduce((acc, curr) => acc + curr.filesCount, 0);
-  return {
-    type: "root",
-    children: [
-      {
-        type: "heading",
-        depth: 1,
-        children: [{ type: "text", value: "Index" }],
-      },
-      {
-        type: "paragraph",
-        children: [
-          {
-            type: "text",
-            value: `This is a list of all the files in the current folder and subfolders.`,
-          },
-          { type: "text", value: " " },
-          {
-            type: "strong",
-            children: [
-              {
-                type: "text",
-                value: `There are ${itemsCount} files in total.`,
-              },
-            ],
-          },
-          { type: "text", value: "\n\n" },
-          {
-            type: "text",
-            value: `Files are also linked to the originals. In the generated word document, you can click on an entry to open it.`,
-          },
-          { type: "text", value: "\n\n" },
-          {
-            type: "emphasis",
-            children: [
-              {
-                type: "text",
-                value:
-                  "Links are relative to the folder you selected. So make sure you place the word document inside it.",
-              },
-            ],
-          },
-        ],
-      },
-      toMdastList(nodes),
-    ],
-  };
-}
-
-function toMdastList(nodes: PathNode[]): unknown {
-  const list = {
-    type: "list",
-    ordered: true,
-    start: 1,
-    spread: false,
-    children: nodes.map((node) => {
-      let children = [];
-      if (node.children.length === 0) {
-        children = [
-          {
-            type: "link",
-            url: node.path,
-            children: [{ type: "text", value: node.name }],
-          },
-        ];
-      } else {
-        children = [
-          {
-            type: "link",
-            url: node.path,
-            children: [{ type: "text", value: node.name }],
-          },
-          toMdastList(node.children),
-        ];
-      }
-      return {
-        type: "listItem",
-        spread: false,
-        children,
-      };
-    }),
-  };
-  return list;
-}
-
 export default function App() {
-  const [items, setItems] = useState<PathNode[]>([]);
+  const [content, setContent] = useState<string | undefined>();
+  const [isLoading, setIsLoading] = useState(false);
+
+  const workerRef = useRef<Worker>();
+
+  useEffect(() => {
+    workerRef.current = new Worker(new URL("../worker", import.meta.url));
+    workerRef.current.onmessage = (event: MessageEvent<unknown>) => {
+      console.log("Got response from worker");
+
+      const content = unified()
+        .use(remarkStringify)
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
+        .stringify(event.data as any);
+
+      setContent(String(content));
+      setIsLoading(false);
+    };
+    return () => {
+      workerRef.current?.terminate();
+    };
+  }, []);
+
+  const index = useCallback(async (selectedPaths: string[]) => {
+    workerRef.current?.postMessage(selectedPaths);
+  }, []);
 
   function handleSelect(selectedPaths: string[]) {
-    setItems(indexFolder(selectedPaths));
+    console.log("Sent selected paths to worker");
+    setIsLoading(true);
+    void index(selectedPaths);
   }
-
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
-  const content = toMarkdown(toMdast(items) as any);
 
   async function handleSaveToWord() {
     console.log("Converting to Docx");
@@ -220,18 +87,21 @@ export default function App() {
       <h1 className="bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-xl font-bold text-transparent">
         What The File!
       </h1>
-      {items.length === 0 && (
+      {!content && (
         <>
-          <div
+          <button
             onMouseDown={async (e) => {
               e.preventDefault();
               const selectedPaths = await selectFolder();
               handleSelect(selectedPaths);
             }}
-            className="flex max-w-sm cursor-pointer flex-col items-center justify-center rounded-lg bg-blue-400 p-4 font-bold text-white hover:bg-blue-500"
+            className={`${isLoading ? "animate-pulse" : ""} flex max-w-sm cursor-pointer flex-col items-center justify-center rounded-lg bg-blue-400 p-4 font-bold text-white hover:bg-blue-500 disabled:bg-slate-300`}
+            disabled={isLoading}
           >
-            Click here to select a folder 🗂️
-          </div>
+            {isLoading
+              ? "Working on it, this may take a minute..."
+              : "Click here to select a folder 🗂️"}
+          </button>
           <p className="max-w-md text-sm text-slate-500">
             Make sure you are using{" "}
             <a
@@ -272,7 +142,7 @@ export default function App() {
           <div className="flex w-full justify-end gap-4 rounded-t-lg bg-slate-100 p-4">
             <button
               onClick={() => {
-                setItems([]);
+                setContent(undefined);
               }}
               className="flex items-center justify-center gap-2 rounded-lg bg-blue-400 px-4 py-1 align-baseline text-sm text-white hover:bg-blue-500"
             >
