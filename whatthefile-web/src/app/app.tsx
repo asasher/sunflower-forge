@@ -9,7 +9,6 @@ import remarkRehype from "remark-rehype";
 import { asBlob } from "html-docx-js-typescript";
 import rehypeStringify from "rehype-stringify";
 import { directoryOpen, fileSave } from "browser-fs-access";
-import { toMarkdown } from "mdast-util-to-markdown";
 import remarkStringify from "node_modules/remark-stringify/lib";
 
 async function selectFolder() {
@@ -30,16 +29,17 @@ async function selectFolder() {
 
 export default function App() {
   const [content, setContent] = useState<string | undefined>();
+  const [blob, setBlob] = useState<Blob | undefined>();
   const [isLoading, setIsLoading] = useState(false);
 
   const workerRef = useRef<Worker>();
 
   useEffect(() => {
     workerRef.current = new Worker(new URL("../worker", import.meta.url));
-    workerRef.current.onmessage = (event: MessageEvent<unknown>) => {
+    workerRef.current.onmessage = async (event: MessageEvent<unknown>) => {
       // Lol, probably didn't need to do this since it's
       // actually the rendering to Markdown that's taking time
-      // oh well
+      // oh well. At least I can set a loading state this way easily.
       console.log("Got response from worker.");
 
       console.log("Converting to Markdown");
@@ -49,7 +49,19 @@ export default function App() {
         .stringify(event.data as any);
 
       console.log("Content is ready to be rendered");
+
+      console.log("Also converting to blob so it's ready to be saved");
+      console.log("Converting to Docx");
+      const processor = unified()
+        .use(remarkParse)
+        .use(remarkRehype)
+        .use(rehypeStringify);
+      const doc = await processor.process(content);
+      const blob = (await asBlob(String(doc))) as Blob;
+      console.log("Blob is ready to be saved");
+
       setContent(String(content));
+      setBlob(blob);
 
       setIsLoading(false);
     };
@@ -69,14 +81,10 @@ export default function App() {
   }
 
   async function handleSaveToWord() {
-    console.log("Converting to Docx");
-    const processor = unified()
-      .use(remarkParse)
-      .use(remarkRehype)
-      .use(rehypeStringify);
-    const doc = await processor.process(content);
-    const blob = (await asBlob(String(doc))) as Blob;
-    console.log("Blob is ready to be saved");
+    if (!blob) {
+      console.error("No blob to save");
+      return;
+    }
     try {
       await fileSave(blob, {
         fileName: "Index.docx",
@@ -149,6 +157,7 @@ export default function App() {
             <button
               onClick={() => {
                 setContent(undefined);
+                setBlob(undefined);
               }}
               className="flex items-center justify-center gap-2 rounded-lg bg-blue-400 px-4 py-1 align-baseline text-sm text-white hover:bg-blue-500"
             >
