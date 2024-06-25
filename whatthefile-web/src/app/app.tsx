@@ -29,75 +29,68 @@ async function selectFolder() {
     })
     .filter((x) => !!x) as string[];
   const basePath = paths[0]!.split("/")[0]!;
-  console.log(basePath);
   paths = paths.map((path) => path.replace(`${basePath}/`, "./"));
-  console.log(paths);
+  console.log(`${paths.length} files selected`);
   return paths;
 }
 
 function indexFolder(filePaths: string[]) {
   if (filePaths.length === 0) return [];
 
-  const map = new Map<string, Set<string>>();
+  const map = new Map<string, PathNode>();
+  const childrenOfParents = new Map<string, Set<string>>();
 
-  const traverse = (path: string) => {
-    const [parent, child, ...tail] = path.split("/");
-    if (!parent || !child) {
+  filePaths.forEach((path) => {
+    const segments = path.split("/");
+
+    if (segments.length < 0) {
+      console.log("Got 0 or 1 segments. This should not happen", path);
+      console.log(
+        "Webkit will only return files paths so empty folders won't be here",
+      );
       return;
     }
-    if (!map.has(parent)) {
-      map.set(parent, new Set());
-    }
-    if (!child.startsWith(".")) map.get(parent)?.add(child);
-    traverse([child, ...tail].join("/"));
-  };
-  filePaths.forEach(traverse);
 
-  const isDir = (path: string) => map.has(path);
+    for (let i = 0; i < segments.length; i++) {
+      const child = segments.slice(0, segments.length - i).join("/");
+      const parent = segments.slice(0, segments.length - i - 1).join("/");
+      if (!parent) continue;
 
-  const toTree = (currentPath: string, basePath = "."): PathNode[] => {
-    const fullPath = [basePath, currentPath].join("/");
-    if (!isDir(currentPath)) {
-      return [
-        {
-          name: currentPath,
-          path: fullPath,
-          filesCount: 0, // Count of files in the dir, in case of file it'll be 0
+      if (!map.has(parent)) {
+        map.set(parent, {
+          name: parent.split("/").slice(-1)[0]!,
+          path: parent,
+          filesCount: 0,
           children: [],
-        },
-      ];
-    }
-    const items = Array.from(map.get(currentPath)!);
-    if (items.length === 0) {
-      // This is an empty "dir"
-      return [
-        {
-          name: currentPath,
-          path: fullPath,
-          filesCount: 0, // Has no files
+        });
+        childrenOfParents.set(parent, new Set());
+      }
+      const parentNode = map.get(parent)!;
+
+      if (!map.has(child)) {
+        map.set(child, {
+          name: child.split("/").slice(-1)[0]!,
+          path: child,
+          filesCount: 0,
           children: [],
-        },
-      ];
+        });
+      }
+      const childNode = map.get(child)!;
+      if (!childrenOfParents.get(parent)!.has(child)) {
+        parentNode.children.push(childNode);
+
+        // This can probably be done in a more efficient way
+        // But it's fine for now
+        parentNode.filesCount =
+          parentNode.children.filter((c) => c.children.length === 0).length +
+          parentNode.children.reduce((acc, curr) => acc + curr.filesCount, 0);
+
+        childrenOfParents.get(parent)!.add(child);
+      }
     }
+  });
 
-    const children = items.flatMap((item) => toTree(item, fullPath));
-    const filesCount =
-      children.reduce((acc, curr) => acc + curr.filesCount, 0) +
-      items.filter((item) => !isDir(item)).length;
-
-    return [
-      {
-        name: currentPath,
-        path: fullPath,
-        filesCount,
-        children,
-      },
-    ];
-  };
-
-  const tree = toTree(".");
-
-  return tree.flatMap((node) => node.children);
+  return map.has(".") ? map.get(".")!.children : [];
 }
 
 function toMdast(nodes: PathNode[]): unknown {
@@ -203,16 +196,22 @@ export default function App() {
   const content = toMarkdown(toMdast(items) as any);
 
   async function handleSaveToWord() {
+    console.log("Converting to Docx");
     const processor = unified()
       .use(remarkParse)
       .use(remarkRehype)
       .use(rehypeStringify);
     const doc = await processor.process(content);
     const blob = (await asBlob(String(doc))) as Blob;
-    await fileSave(blob, {
-      fileName: "whatthefile.docx",
-      extensions: [".docx"],
-    });
+    console.log("Blob is ready to be saved");
+    try {
+      await fileSave(blob, {
+        fileName: "Index.docx",
+        extensions: [".docx"],
+      });
+    } catch (e) {
+      console.error(e);
+    }
   }
 
   // TODO: Copy over eslint config from t3
