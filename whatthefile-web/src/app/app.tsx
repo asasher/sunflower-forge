@@ -37,14 +37,20 @@ export default function App() {
   useEffect(() => {
     workerRef.current = new Worker(new URL("../worker", import.meta.url));
     workerRef.current.onmessage = (event: MessageEvent<unknown>) => {
-      console.log("Got response from worker");
+      // Lol, probably didn't need to do this since it's
+      // actually the rendering to Markdown that's taking time
+      // oh well
+      console.log("Got response from worker.");
 
+      console.log("Converting to Markdown");
       const content = unified()
         .use(remarkStringify)
         // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
         .stringify(event.data as any);
 
+      console.log("Content is ready to be rendered");
       setContent(String(content));
+
       setIsLoading(false);
     };
     return () => {
