@@ -109,7 +109,9 @@ export default function App() {
 
   // TODO: Copy over eslint config from t3
   return (
-    <div className="flex min-h-svh w-full flex-col gap-4 p-8">
+    <div
+      className={`${!content ? "max-w-md" : ""} flex w-full flex-col gap-4 p-8`}
+    >
       <h1 className="bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-xl font-bold text-transparent">
         What The File!
       </h1>
@@ -167,7 +169,7 @@ export default function App() {
       )}
       {content && (
         <div className="flex w-full flex-col justify-start gap-4 rounded-lg border-2">
-          <div className="flex w-full justify-end gap-4 rounded-t-lg bg-slate-100 p-4">
+          <div className="flex w-full flex-wrap justify-end gap-4 rounded-t-lg bg-slate-100 p-4">
             <button
               onClick={() => {
                 setContent(undefined);
