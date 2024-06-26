@@ -140,7 +140,7 @@ export default function App() {
             >
               Chrome
             </a>
-            ,
+            ,{" "}
             <a
               href="https://www.microsoft.com/en-us/edge"
               className="font-bold text-cyan-500 underline"
