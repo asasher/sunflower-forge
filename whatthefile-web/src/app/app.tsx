@@ -136,14 +136,21 @@ export default function App() {
             Make sure you are using{" "}
             <a
               href="https://www.google.com/chrome/"
-              className="font-bold text-amber-400 text-amber-500 underline"
+              className="font-bold text-amber-500 underline"
             >
               Chrome
+            </a>
+            ,
+            <a
+              href="https://www.microsoft.com/en-us/edge"
+              className="font-bold text-cyan-500 underline"
+            >
+              Edge
             </a>
             , or better yet{" "}
             <a
               href="https://arc.net/"
-              className="font-bold text-blue-400 text-purple-500 underline"
+              className="font-bold text-purple-500 underline"
             >
               Arc
             </a>{" "}
