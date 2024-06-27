@@ -32,6 +32,7 @@ export default function App() {
   const [blob, setBlob] = useState<Blob | undefined>();
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string>();
+  const [message, setMessage] = useState<string>();
 
   const workerRef = useRef<Worker>();
 
@@ -65,6 +66,7 @@ export default function App() {
       setBlob(blob);
 
       setIsLoading(false);
+      setMessage(undefined);
     };
     return () => {
       workerRef.current?.terminate();
@@ -78,9 +80,13 @@ export default function App() {
   async function handleSelect() {
     try {
       const selectedPaths = await selectFolder();
+      const uniquePaths = Array.from(new Set(selectedPaths));
       setIsLoading(true);
+      setMessage(
+        `There are ${uniquePaths.length} files in total. If you're browser complains about page being unresponsive, just select wait.`,
+      );
       console.log("Sent selected paths to worker");
-      void index(selectedPaths);
+      void index(uniquePaths);
     } catch (e) {
       console.error(e);
       setErrorMessage(
@@ -129,6 +135,9 @@ export default function App() {
               ? "Working on it, this may take a minute..."
               : "Click here to select a folder 🗂️"}
           </button>
+          {message && (
+            <p className="max-w-md text-sm text-sky-500">{message}</p>
+          )}
           {errorMessage && (
             <p className="max-w-md text-sm text-red-500">{errorMessage}</p>
           )}

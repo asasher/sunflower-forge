@@ -1,6 +1,3 @@
-import { unified } from "unified";
-import remarkStringify from "remark-stringify";
-
 export type PathNode = {
   name: string;
   path: string;
@@ -17,7 +14,7 @@ function indexFolder(filePaths: string[]) {
   filePaths.forEach((path) => {
     const segments = path.split("/");
 
-    if (segments.length < 0) {
+    if (segments.length < 1) {
       console.log("Got 0 or 1 segments. This should not happen", path);
       console.log(
         "Webkit will only return files paths so empty folders won't be here",
@@ -48,17 +45,16 @@ function indexFolder(filePaths: string[]) {
           filesCount: 0,
           children: [],
         });
+        childrenOfParents.set(child, new Set());
       }
       const childNode = map.get(child)!;
       if (!childrenOfParents.get(parent)!.has(child)) {
         parentNode.children.push(childNode);
-
         // This can probably be done in a more efficient way
         // But it's fine for now
         parentNode.filesCount =
           parentNode.children.filter((c) => c.children.length === 0).length +
           parentNode.children.reduce((acc, curr) => acc + curr.filesCount, 0);
-
         childrenOfParents.get(parent)!.add(child);
       }
     }
@@ -74,7 +70,9 @@ function toMdast(nodes: PathNode[]): unknown {
       children: [],
     };
   }
-  const itemsCount = nodes.reduce((acc, curr) => acc + curr.filesCount, 0);
+  const itemsCount =
+    nodes.reduce((acc, curr) => acc + curr.filesCount, 0) +
+    nodes.filter((x) => x.children.length === 0).length;
   return {
     type: "root",
     children: [
