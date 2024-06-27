@@ -60,13 +60,24 @@ export default function App() {
         .use(rehypeStringify);
       const doc = await processor.process(content);
       const blob = (await asBlob(String(doc))) as Blob;
+      setBlob(blob);
       console.log("Blob is ready to be saved");
 
-      setContent(String(content));
-      setBlob(blob);
+      // Rendering markdown is super slow and can crash the page
+      // sp let's limit the number of lines to maxLines to avoid that
+      const maxLines = 100;
+      const lines = String(content).split("\n");
+      if (lines.length >= maxLines) {
+        setMessage(
+          "We've truncated the output here to 100 lines, but the generated Word document will have all the content.",
+        );
+        setContent([...lines.slice(0, maxLines), "\n..."].join("\n"));
+      } else {
+        setMessage(undefined);
+        setContent(lines.join("\n"));
+      }
 
       setIsLoading(false);
-      setMessage(undefined);
     };
     return () => {
       workerRef.current?.terminate();
@@ -190,6 +201,7 @@ export default function App() {
               onClick={() => {
                 setContent(undefined);
                 setBlob(undefined);
+                setMessage(undefined);
               }}
               className="flex items-center justify-center gap-2 rounded-lg bg-blue-400 px-4 py-1 align-baseline text-sm text-white hover:bg-blue-500"
             >
@@ -204,6 +216,11 @@ export default function App() {
               Save as Microsoft Word
             </button>
           </div>
+          {message && (
+            <div className="p-4">
+              <p className="max-w-md text-sm text-sky-500">{message}</p>
+            </div>
+          )}
           <Markdown
             className="prose flex w-full max-w-none flex-col justify-start rounded-lg border-blue-300 p-4"
             components={{
