@@ -1,7 +1,6 @@
 export type PathNode = {
   name: string;
   path: string;
-  filesCount: number;
   children: PathNode[];
 };
 
@@ -31,7 +30,6 @@ function indexFolder(filePaths: string[]) {
         map.set(parent, {
           name: parent.split("/").slice(-1)[0]!,
           path: parent,
-          filesCount: 0,
           children: [],
         });
         childrenOfParents.set(parent, new Set());
@@ -42,7 +40,6 @@ function indexFolder(filePaths: string[]) {
         map.set(child, {
           name: child.split("/").slice(-1)[0]!,
           path: child,
-          filesCount: 0,
           children: [],
         });
         childrenOfParents.set(child, new Set());
@@ -50,11 +47,6 @@ function indexFolder(filePaths: string[]) {
       const childNode = map.get(child)!;
       if (!childrenOfParents.get(parent)!.has(child)) {
         parentNode.children.push(childNode);
-        // This can probably be done in a more efficient way
-        // But it's fine for now
-        parentNode.filesCount =
-          parentNode.children.filter((c) => c.children.length === 0).length +
-          parentNode.children.reduce((acc, curr) => acc + curr.filesCount, 0);
         childrenOfParents.get(parent)!.add(child);
       }
     }
@@ -63,16 +55,13 @@ function indexFolder(filePaths: string[]) {
   return map.has(".") ? map.get(".")!.children : [];
 }
 
-function toMdast(nodes: PathNode[]): unknown {
+function toMdast(nodes: PathNode[], filesCount: number): unknown {
   if (nodes.length === 0) {
     return {
       type: "root",
       children: [],
     };
   }
-  const itemsCount =
-    nodes.reduce((acc, curr) => acc + curr.filesCount, 0) +
-    nodes.filter((x) => x.children.length === 0).length;
   return {
     type: "root",
     children: [
@@ -94,7 +83,7 @@ function toMdast(nodes: PathNode[]): unknown {
             children: [
               {
                 type: "text",
-                value: `There are ${itemsCount} files in total.`,
+                value: `There are ${filesCount} files in total.`,
               },
             ],
           },
@@ -157,16 +146,12 @@ function toMdastList(nodes: PathNode[]): unknown {
   return list;
 }
 
-(function (global) {
-  global!.document = global!.document || {};
-})(typeof global !== "undefined" ? global : this);
-
 addEventListener("message", (event: MessageEvent<string[]>) => {
   console.log("Got message form main thread.");
   const nodes = indexFolder(event.data);
   console.log("Indexing done. Converting to markdown.");
 
-  const mdast = toMdast(nodes);
+  const mdast = toMdast(nodes, event.data.length);
   console.log("Mdast ready. Posting to main thread.");
 
   postMessage(mdast);
