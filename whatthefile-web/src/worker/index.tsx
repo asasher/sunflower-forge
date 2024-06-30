@@ -1,8 +1,6 @@
-export type PathNode = {
-  name: string;
-  path: string;
-  children: PathNode[];
-};
+import { renderToString } from "react-dom/server";
+import { asBlob } from "html-docx-js-typescript";
+import { FilesTree, type PathNode } from "~/app/_components/FilesTree";
 
 function indexFolder(filePaths: string[]) {
   if (filePaths.length === 0) return [];
@@ -146,13 +144,33 @@ function toMdastList(nodes: PathNode[]): unknown {
   return list;
 }
 
-addEventListener("message", (event: MessageEvent<string[]>) => {
+type WorkerResponse<K, T> = {
+  type: K;
+  data: T;
+};
+
+export type IndexResponse = WorkerResponse<"index", PathNode[]>;
+export type MakeBlobResponse = WorkerResponse<"makeBlob", Blob>;
+
+async function handleMessage(event: MessageEvent<string[]>) {
   console.log("Got message form main thread.");
+
   const nodes = indexFolder(event.data);
-  console.log("Indexing done. Converting to markdown.");
+  postMessage({
+    type: "index",
+    data: nodes,
+  } satisfies IndexResponse);
 
-  const mdast = toMdast(nodes, event.data.length);
-  console.log("Mdast ready. Posting to main thread.");
+  const doc = renderToString(
+    <FilesTree pathNodes={nodes} filesCount={event.data.length} />,
+  );
+  const blob = await asBlob(doc);
+  postMessage({
+    type: "makeBlob",
+    data: blob as Blob,
+  } satisfies MakeBlobResponse);
+}
 
-  postMessage(mdast);
+addEventListener("message", (event: MessageEvent<string[]>) => {
+  void handleMessage(event);
 });

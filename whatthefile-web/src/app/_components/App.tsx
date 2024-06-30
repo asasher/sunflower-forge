@@ -1,15 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import Markdown from "react-markdown";
-import remarkParse from "remark-parse";
-import { unified } from "unified";
 import { ChevronLeft, FolderDown } from "lucide-react";
-import remarkRehype from "remark-rehype";
-import { asBlob } from "html-docx-js-typescript";
-import rehypeStringify from "rehype-stringify";
 import { directoryOpen, fileSave } from "browser-fs-access";
-import remarkStringify from "node_modules/remark-stringify/lib";
+import { FilesTree, type PathNode } from "./FilesTree";
+import type { IndexResponse, MakeBlobResponse } from "~/worker";
+import { set } from "zod";
 
 async function selectFolder() {
   const result = await directoryOpen({
@@ -27,57 +23,51 @@ async function selectFolder() {
   return paths;
 }
 
+const FOLDER_DEFAULT_TEXT = "Click here to select a folder 🗂️";
+const SELECTING_FOLDER_TEXT = "Selecting a folder...";
+const WORKING_TEXT = "Working on it, this may take a while...";
+
 export default function App() {
-  const [content, setContent] = useState<string | undefined>();
+  const [uniquePaths, setUniquePaths] = useState<string[]>([]);
+  const [pathNodes, setPathNodes] = useState<PathNode[]>([]);
   const [blob, setBlob] = useState<Blob | undefined>();
   const [isLoading, setIsLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string>();
+  const [buttonText, setButtonText] = useState<string>(FOLDER_DEFAULT_TEXT);
   const [message, setMessage] = useState<string>();
+  const [errorMessage, setErrorMessage] = useState<string>();
 
   const workerRef = useRef<Worker>();
 
+  function clear() {
+    setButtonText(FOLDER_DEFAULT_TEXT);
+    setUniquePaths([]);
+    setPathNodes([]);
+    setBlob(undefined);
+    setMessage(undefined);
+    setErrorMessage(undefined);
+    setIsLoading(false);
+  }
+
   useEffect(() => {
-    workerRef.current = new Worker(new URL("../worker", import.meta.url));
-    workerRef.current.onmessage = async (event: MessageEvent<unknown>) => {
-      // Lol, probably didn't need to do this since it's
-      // actually the rendering to Markdown that's taking time
-      // oh well. At least I can set a loading state this way easily.
+    workerRef.current = new Worker(
+      new URL("~/worker/index.tsx", import.meta.url),
+    );
+    workerRef.current.onmessage = async (
+      event: MessageEvent<IndexResponse | MakeBlobResponse>,
+    ) => {
       console.log("Got response from worker.");
 
-      console.log("Converting to Markdown");
-      const content = unified()
-        .use(remarkStringify)
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any
-        .stringify(event.data as any);
-
-      console.log("Content is ready to be rendered");
-
-      console.log("Also converting to blob so it's ready to be saved");
-      console.log("Converting to Docx");
-      const processor = unified()
-        .use(remarkParse)
-        .use(remarkRehype)
-        .use(rehypeStringify);
-      const doc = await processor.process(content);
-      const blob = (await asBlob(String(doc))) as Blob;
-      setBlob(blob);
-      console.log("Blob is ready to be saved");
-
-      // Rendering markdown is super slow and can crash the page
-      // sp let's limit the number of lines to maxLines to avoid that
-      const maxLines = 100;
-      const lines = String(content).split("\n");
-      if (lines.length >= maxLines) {
-        setMessage(
-          "We've truncated the output here to 100 lines, but the generated Word document will have all the content.",
-        );
-        setContent([...lines.slice(0, maxLines), "\n..."].join("\n"));
-      } else {
+      if (event.data.type === "index") {
+        console.log("Indexing done.");
+        setPathNodes(event.data.data);
         setMessage(undefined);
-        setContent(lines.join("\n"));
       }
 
-      setIsLoading(false);
+      if (event.data.type === "makeBlob") {
+        console.log("File is ready to be saved");
+        setBlob(event.data.data);
+        setIsLoading(false);
+      }
     };
     return () => {
       workerRef.current?.terminate();
@@ -90,16 +80,20 @@ export default function App() {
 
   async function handleSelect() {
     try {
+      setIsLoading(true);
+      setButtonText(SELECTING_FOLDER_TEXT);
       const selectedPaths = await selectFolder();
       const uniquePaths = Array.from(new Set(selectedPaths));
-      setIsLoading(true);
+      setUniquePaths(uniquePaths);
       setMessage(
         `There are ${uniquePaths.length} files in total. If you're browser complains about page being unresponsive, just select wait.`,
       );
+      setButtonText(WORKING_TEXT);
       console.log("Sent selected paths to worker");
       void index(uniquePaths);
     } catch (e) {
       console.error(e);
+      clear();
       setErrorMessage(
         "It seemed I couldn't access your folder, try again later. If you're trying to select One Drive or Google Drive, make sure they are available offline.",
       );
@@ -127,12 +121,12 @@ export default function App() {
   // TODO: Copy over eslint config from t3
   return (
     <div
-      className={`${!content ? "max-w-md" : ""} flex w-full flex-col gap-4 p-8`}
+      className={`${pathNodes.length <= 0 ? "max-w-md" : ""} flex w-full flex-col gap-4 p-8`}
     >
       <h1 className="bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-xl font-bold text-transparent">
         What The File!
       </h1>
-      {!content && (
+      {pathNodes.length <= 0 && (
         <>
           <button
             onMouseDown={(e) => {
@@ -142,9 +136,7 @@ export default function App() {
             className={`${isLoading ? "animate-pulse" : ""} flex max-w-sm cursor-pointer flex-col items-center justify-center rounded-lg bg-blue-400 p-4 font-bold text-white hover:bg-blue-500 disabled:bg-slate-300`}
             disabled={isLoading}
           >
-            {isLoading
-              ? "Working on it, this may take a minute..."
-              : "Click here to select a folder 🗂️"}
+            {buttonText}
           </button>
           {message && (
             <p className="max-w-md text-sm text-sky-500">{message}</p>
@@ -194,14 +186,12 @@ export default function App() {
           </p>
         </>
       )}
-      {content && (
+      {pathNodes.length > 0 && (
         <div className="flex w-full flex-col justify-start gap-4 rounded-lg border-2">
           <div className="flex w-full flex-wrap justify-end gap-4 rounded-t-lg bg-slate-100 p-4">
             <button
               onClick={() => {
-                setContent(undefined);
-                setBlob(undefined);
-                setMessage(undefined);
+                clear();
               }}
               className="flex items-center justify-center gap-2 rounded-lg bg-blue-400 px-4 py-1 align-baseline text-sm text-white hover:bg-blue-500"
             >
@@ -210,7 +200,8 @@ export default function App() {
             </button>
             <button
               onClick={() => void handleSaveToWord()}
-              className="flex items-center justify-center gap-2 rounded-lg bg-blue-400 px-4 py-1 text-sm text-white hover:bg-blue-500"
+              className={`${isLoading ? "animate-pulse" : ""} flex items-center justify-center gap-2 rounded-lg bg-blue-400 px-4 py-1 text-sm text-white hover:bg-blue-500 disabled:bg-slate-300`}
+              disabled={!blob}
             >
               <FolderDown className="h-4 w-4" />
               Save as Microsoft Word
@@ -221,27 +212,9 @@ export default function App() {
               <p className="max-w-md text-sm text-sky-500">{message}</p>
             </div>
           )}
-          <Markdown
-            className="prose flex w-full max-w-none flex-col justify-start rounded-lg border-blue-300 p-4"
-            components={{
-              a(props) {
-                // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                const { children, className, node, href, ...rest } = props;
-                return (
-                  <a
-                    {...rest}
-                    href={`file://${href}`}
-                    className={`${className} cursor-none border-b border-dashed border-blue-300 no-underline`}
-                    onClick={(e) => e.preventDefault()}
-                  >
-                    {children}
-                  </a>
-                );
-              },
-            }}
-          >
-            {content}
-          </Markdown>
+          <div className="prose p-4">
+            <FilesTree pathNodes={pathNodes} filesCount={uniquePaths.length} />
+          </div>
         </div>
       )}
     </div>
