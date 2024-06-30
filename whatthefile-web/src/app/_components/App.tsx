@@ -5,7 +5,6 @@ import { ChevronLeft, FolderDown } from "lucide-react";
 import { directoryOpen, fileSave } from "browser-fs-access";
 import { FilesTree, type PathNode } from "./FilesTree";
 import type { IndexResponse, MakeBlobResponse } from "~/worker";
-import { set } from "zod";
 
 async function selectFolder() {
   const result = await directoryOpen({
